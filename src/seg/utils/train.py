@@ -64,4 +64,4 @@ def do_train(json_cfg):
 
     run.finish()
     
-    return model
+    return data, model

@@ -60,7 +60,7 @@ class SegModelModule(pl.LightningModule):
         return out["loss"]
 
     def on_validation_epoch_end(self):
-        LOG.info("Validation epoch ending.")
+        LOG.debug("Validation epoch ending.")
         self.epoch_metrics.update(
           {
             "val/loss": self.val_epoch_loss.mean(),
@@ -71,7 +71,7 @@ class SegModelModule(pl.LightningModule):
         del self.val_epoch_err
 
     def on_train_epoch_end(self):
-        LOG.info("Training epoch ending.")
+        LOG.debug("Training epoch ending.")
         self.epoch_metrics.update(
           {
             "trainer/loss": self.train_epoch_loss.mean(),
