@@ -60,22 +60,22 @@ class SegModelModule(pl.LightningModule):
         return out["loss"]
 
     def on_validation_epoch_end(self):
-        LOG("Validation epoch ending.")
+        LOG.info("Validation epoch ending.")
         self.epoch_metrics.update(
           {
             "val/loss": self.val_epoch_loss.mean(),
-            "val/mae": (np.abs(self.val_epoch_err) * self.train.samprate).mean(),
+            "val/mae": (np.abs(self.val_epoch_err) / self.cfg.train.samprate).mean(),
           }
         )
         del self.val_epoch_loss
         del self.val_epoch_err
 
     def on_train_epoch_end(self):
-        LOG("Training epoch ending.")
+        LOG.info("Training epoch ending.")
         self.epoch_metrics.update(
           {
             "trainer/loss": self.train_epoch_loss.mean(),
-            "trainer/mae": (np.abs(self.train_epoch_err) * self.train.samprate).mean(),
+            "trainer/mae": (np.abs(self.train_epoch_err) / self.cfg.train.samprate).mean(),
           }
         )
         self.log_dict(self.epoch_metrics, on_step=False, on_epoch=True, logger=True, prog_bar=True)
