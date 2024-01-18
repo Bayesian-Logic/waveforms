@@ -60,6 +60,8 @@ def do_train(json_cfg):
         check_val_every_n_epoch=1,
     )
 
-    # TODO
+    trainer.fit(model, data)
 
+    run.finish()
+    
     return model

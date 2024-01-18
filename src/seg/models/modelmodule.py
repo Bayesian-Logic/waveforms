@@ -89,7 +89,7 @@ class SegModelModule(pl.LightningModule):
         optim_class = getattr(optim_module, optim_class_name)
         extra_params = getattr(self.cfg.optimizer, optim_class_name, {})
         optimizer = optim_class(
-            self.parameters(), lr=self.cfg.optimizer.lr, **extra_params
+            self.parameters(), lr=self.cfg.optimizer.lr, **vars(extra_params)
         )
         if not hasattr(self.cfg.optimizer, "scheduler"):
             return optimizer
