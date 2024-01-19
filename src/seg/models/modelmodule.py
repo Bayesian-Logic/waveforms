@@ -79,7 +79,7 @@ class SegModelModule(pl.LightningModule):
         # Plot the prediction error histograms
         fig = plt.figure()
         plt.hist(
-            self.val_epoch_err / self.cfg.train.samprate, bins=np.linspace(-1, 1, 41)
+            self.val_epoch_err / self.cfg.train.samprate, bins=np.linspace(-1, 1, 21)
         )
         plt.xlabel("Time (seconds)")
         plt.ylabel("Frequency")
