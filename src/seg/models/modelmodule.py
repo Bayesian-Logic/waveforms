@@ -1,12 +1,14 @@
 import importlib
 import logging
 from types import SimpleNamespace
+import os
 
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
 from transformers import get_cosine_schedule_with_warmup
 import numpy as np
+import matplotlib.pyplot as plt
 
 LOG = logging.getLogger("seg.models")
 
@@ -40,6 +42,7 @@ class SegModelModule(pl.LightningModule):
         self.train_epoch_loss = np.array([])
         self.train_epoch_err = np.array([])
         self.epoch_metrics = {}
+        self.epoch_preds_images = []
 
     def training_step(self, batch, batch_idx):
         out = self.forward(batch)
@@ -67,6 +70,16 @@ class SegModelModule(pl.LightningModule):
             "val/mae": (np.abs(self.val_epoch_err) / self.cfg.train.samprate).mean(),
           }
         )
+        # Plot the prediction error histograms
+        fig = plt.figure()
+        plt.hist(self.val_epoch_err / self.cfg.train.samprate, bins=np.linspace(-1, 1, 21))
+        plt.xlabel("Time (seconds)")
+        plt.ylabel("Frequency")
+        plt.title("Val Error")
+        fig_file = os.path.join(self.cfg.output_dir, "val_err.jpg")
+        fig.savefig(fig_file)
+        plt.close(fig)
+        self.epoch_preds_images.append(str(fig_file))
         del self.val_epoch_loss
         del self.val_epoch_err
 
@@ -79,9 +92,14 @@ class SegModelModule(pl.LightningModule):
           }
         )
         self.log_dict(self.epoch_metrics, on_step=False, on_epoch=True, logger=True, prog_bar=True)
+        if len(self.epoch_preds_images):
+            self.logger.log_image(
+                key="Pred Err", images=self.epoch_preds_images, step=self.global_step
+            )
         del self.train_epoch_loss
         del self.train_epoch_err
         del self.epoch_metrics
+        del self.epoch_preds_images
 
     def configure_optimizers(self):
         optim_class_name = self.cfg.optimizer.class_name
