@@ -32,36 +32,13 @@ import argparse
 import logging
 
 import cx_Oracle
-import sqlite3
+import pandas
+import pyarrow
+import pyarrow.parquet
+import numpy as np
 
-
-OUT_DB_SCHEMA = """
-CREATE TABLE waveform (
-  orid INTEGER NOT NULL,
-  arid INTEGER NOT NULL,
-  sta TEXT,
-  chan TEXT,
-  phase TEXT,
-  snr REAL,
-  amp REAL,
-  per REAL,
-  delta REAL,
-  mb REAL,
-  ml REAL,
-  ndef INTEGER,
-  start_time REAL,
-  end_time REAL,
-  arrival_time REAL,
-  timeres REAL,
-  auto_arrival_time REAL,
-  nsamp INTEGER,
-  samprate REAL,
-  calib REAL,
-  dtype TEXT,
-  data BLOB,
-  PRIMARY KEY(orid, arid)
-);
-"""
+COLUMNS = """orid arid sta chan phase snr amp per delta mb ml ndef
+arrival_time timeres auto_arrival_time samprate calib data""".split()
 
 
 def get_logger():
@@ -104,8 +81,27 @@ def read_arguments():
         type=str,
         help="Ending date of dataset (not inclusive).",
     )
+    parser.add_argument(
+        "-w",
+        "--window",
+        metavar="SECONDS",
+        type=int,
+        default=100,
+        help="Window of waveform to extract around the arrival time in seconds (100 s).",
+    )
+    parser.add_argument(
+        "-c",
+        "--channel",
+        metavar="NAME",
+        type=str,
+        default="cb",
+        help="Name of channel to download (cb).",
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
+
+    if args.window % 2 != 0:
+        raise ValueError(f"Window {args.window} is not a multiple of 2.")
 
     def jdate_to_epoch(jdate_val):
         datetime_val = datetime.datetime.strptime(jdate_val, "%Y%j")
@@ -128,10 +124,6 @@ def main():
     args = read_arguments()
     in_conn = cx_Oracle.connect(os.getenv("ADB_ACCOUNT"))
     debug("Connected to Oracle database.")
-    data_file = f"{args.start[0]}-{args.end[0]}.db"
-    out_conn = sqlite3.connect(data_file)
-    out_conn.executescript(OUT_DB_SCHEMA)
-    info(f"Created sqlite3 database {data_file}")
     # We will first query all the Origin IDentifiers of the LEB
     # origins and then we will download the waveforms for each of them.
     curs = in_conn.cursor()
@@ -139,28 +131,39 @@ def main():
         f"""select orid from leb.origin where time
         >= {args.start_epoch} and time < {args.end_epoch}"""
     )
-    all_orids = curs.fetchall()
+    all_orids = [x for x, in curs.fetchall()]
     info(f"{len(all_orids)} origins in date range.")
-    tot_events, tot_waveforms = 0, 0
-    for (orid,) in all_orids:
-        num_waveforms = fetch_event(curs, out_conn, orid)
-        if num_waveforms > 0:
+    data, tot_events, tot_waveforms = [], 0, 0
+    for idx, orid in enumerate(all_orids):
+        waveforms = fetch_event(curs, orid, args.channel, args.window)
+        if len(waveforms) > 0:
             tot_events += 1
-            tot_waveforms += num_waveforms
-    out_conn.commit()
+            tot_waveforms += len(waveforms)
+            data.extend(waveforms)
+        if (idx + 1) % (len(all_orids) // 10) == 0:
+            info(f"Downloaded {100 * (idx+1) // len(all_orids)} %.")
+    data_file = f"{args.channel}-{args.window}-{args.start[0]}-{args.end[0]}.parquet"
+    info("Generating parquet file.")
+    df = pandas.DataFrame(data=data, columns=COLUMNS)
+    table = pyarrow.Table.from_pandas(df, preserve_index=False)
+    with pyarrow.parquet.ParquetWriter(data_file, table.schema) as writer:
+        writer.write_table(table)
     info(
         f"Finished generating dataset in {data_file} with {tot_events}"
         f" events and {tot_waveforms} waveforms."
     )
 
 
-def fetch_event(curs, out_conn, orid):
+def fetch_event(curs, orid, channel, window):
     """
     Fetch all the waveforms for the given `orid`.
 
-    We will query each arrival of the orid that has a cb or ib channel
-    waveform using `curs` and save the results in the sqlite database in
-    `out_conn`.
+    We will query each arrival of the orid that has the given `channel`
+    waveform using `curs` and read `window` seconds around the
+    arrival time.
+
+    The arrivals are returned as a list of rows where each row
+    has the columns in the `COLUMNS` global variable.
     """
     debug(f"Fetching event orid {orid}")
     # We join the LEB origin, assoc, and arrival tables to get the main
@@ -181,17 +184,16 @@ def fetch_event(curs, out_conn, orid):
         join segment.wftag tag on (tagname='orid' and tagid=orid)
         join segment.wfdisc wf using (sta, wfid)
         left join idcx.arrival iarr using (arid, sta)
-        where orid=:1 and datatype in ('t4', 's4') and wf.chan = 'cb'
+        where orid=:1 and datatype in ('t4', 's4') and wf.chan = '{channel}'
         and lass.phase in ('P', 'Pn', 'Pg') and larr.snr > 10
         and lass.timedef='d'
-        and larr.time between wf.time and wf.endtime
+        and larr.time between wf.time + {window//2} and wf.endtime - {window//2}
         """,
         [orid],
     )
-    num_waveforms = 0
+    waveforms = []
     colnames = [coldesc[0].lower() for coldesc in curs.description]
     for row in curs.fetchall():
-        num_waveforms += 1
         row = {name: value for (name, value) in zip(colnames, row)}
         debug(
             f"Downloading waveform for sta {row['sta']} phase {row['phase']}"
@@ -201,18 +203,24 @@ def fetch_event(curs, out_conn, orid):
         path = os.path.join(row["dir"], row["dfile"])
         with open(path, "rb") as fp:
             fp.seek(row["foff"])
-            row["data"] = fp.read(row["nsamp"] * 4)  # each sample is 4 bytes
-        out_conn.execute(
-            """INSERT INTO waveform(orid, arid, sta, chan, phase, snr,
-            amp, per, delta, mb, ml, ndef, start_time, end_time, arrival_time,
-            timeres, auto_arrival_time, nsamp, samprate, calib, dtype, data) 
-            VALUES (:orid, :arid, :sta, :chan, :phase, :snr, :amp, :per, :delta,
-            :mb, :ml, :ndef, :start_time, :end_time, :arrival_time,
-            :timeres, :auto_arrival_time, :nsamp, :samprate, :calib, :dtype, :data)""",
-            row,
-        )
-    out_conn.commit()
-    return num_waveforms
+            raw_buf = fp.read(row["nsamp"] * 4)  # each sample is 4 bytes
+            # Convert the raw data bytes into a numpy array and extract only
+            # the relevant `window` samples from it.
+            raw_data = np.ndarray(
+                shape=(int(row["nsamp"]),), dtype=row["dtype"], buffer=raw_buf
+            )
+            st = int(
+                (row["arrival_time"] - window // 2 - row["start_time"])
+                * row["samprate"]
+            )
+            num = int(window * row["samprate"])
+            row["data"] = raw_data[st : st + num].astype(np.float32)
+            assert len(row["data"]) == num
+            datum = []
+            for colname in COLUMNS:
+                datum.append(row[colname])
+            waveforms.append(datum)
+    return waveforms
 
 
 if __name__ == "__main__":

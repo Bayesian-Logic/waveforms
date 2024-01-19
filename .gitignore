@@ -1,5 +1,6 @@
 # Ignore any data files.
 *.db
+*.parquet
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
