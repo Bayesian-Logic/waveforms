@@ -4,6 +4,9 @@ from typing import Iterator, List
 import hashlib
 import json
 
+import numpy as np
+
+
 def run_query(conn: Connection, query: str) -> Iterator[SimpleNamespace]:
     """
     Returns an iterator over the query results such that each column is an
@@ -29,3 +32,9 @@ def json_to_py(json_cfg):
     where `p = json_to_py(j)`.
     """
     return json.loads(json.dumps(json_cfg), object_hook=lambda d: SimpleNamespace(**d))
+
+def downsample(arr: np.ndarray, new_size):
+    assert(len(arr) >= new_size)
+    # Create the shrunken array by selecting values at calculated indices
+    indices = np.linspace(0, len(arr) - 1, new_size).astype(int)
+    return arr[indices]
