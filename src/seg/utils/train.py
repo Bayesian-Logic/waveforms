@@ -11,6 +11,7 @@ from pytorch_lightning.callbacks import (
     RichProgressBar,
 )
 from pytorch_lightning.loggers import WandbLogger
+import pandas as pd
 
 from .common import json_to_py
 from ..data.datamodule import SegDataModule
@@ -47,7 +48,7 @@ def do_train(json_cfg):
         deterministic=cfg.train.deterministic,
         # num_nodes=cfg.training.num_gpus,
         accelerator=cfg.train.accelerator,
-        precision="16-mixed" if cfg.train.use_amp else 32,
+        precision=cfg.train.precision,
         fast_dev_run=cfg.train.debug,  # run only 1 train batch and 1 val batch
         max_epochs=cfg.train.epoch,
         gradient_clip_val=cfg.train.gradient_clip_val,
@@ -62,6 +63,16 @@ def do_train(json_cfg):
 
     trainer.fit(model, data)
 
+    # We will now join the validation prediction errors with the validation data.
+    pred_err = pd.read_csv(os.path.join(cfg.output_dir, "val_err.csv"))
+    val_df = data.get_val_df()
+    del val_df["data"]
+    val_df = val_df.merge(pred_err, how="outer", on=["orid", "arid"])
+    # We will save the validation predictions and upload them to wandb.
+    val_df.to_csv(os.path.join(cfg.output_dir, "val_data.csv"), index=False)
+    val_table = wandb.Table(dataframe=val_df)
+    run.log({f"val_fold_{cfg.train.fold_idx}": val_table})
+
     run.finish()
-    
+
     return data, model

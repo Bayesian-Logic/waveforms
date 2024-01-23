@@ -6,6 +6,7 @@ import os
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
+import pandas as pd
 from transformers import get_cosine_schedule_with_warmup
 import numpy as np
 import matplotlib.pyplot as plt
@@ -55,11 +56,13 @@ class SegModelModule(pl.LightningModule):
     def on_validation_epoch_start(self):
         self.val_epoch_loss = []
         self.val_epoch_err = []
+        self.val_epoch_name = []
 
     def validation_step(self, batch, batch_idx):
         out = self.forward(batch)
         self.val_epoch_loss.extend(out["loss_full"])
         self.val_epoch_err.extend(out["onset_pred"] - batch["onset"].cpu().numpy())
+        self.val_epoch_name.extend(batch["name"])
         return out["loss"]
 
     def on_validation_epoch_end(self):
@@ -72,12 +75,14 @@ class SegModelModule(pl.LightningModule):
                 ).mean(),
             }
         )
+        val_err = np.array(self.val_epoch_err) / self.cfg.train.samprate
+        orids, arids = tuple(zip(*(name.split("_") for name in self.val_epoch_name)))
+        pd.DataFrame({"orid": orids, "arid": arids, "pred_err": val_err}).to_csv(
+            os.path.join(self.cfg.output_dir, "val_err.csv"), index=False
+        )
         # Plot the prediction error histograms
         fig = plt.figure()
-        plt.hist(
-            np.array(self.val_epoch_err) / self.cfg.train.samprate,
-            bins=np.linspace(-1, 1, 21),
-        )
+        plt.hist(val_err, bins=np.linspace(-1, 1, 21))
         plt.xlabel("Time (seconds)")
         plt.ylabel("Frequency")
         plt.title("Val Error")
@@ -87,6 +92,7 @@ class SegModelModule(pl.LightningModule):
         self.epoch_preds_images.append(str(fig_file))
         del self.val_epoch_loss
         del self.val_epoch_err
+        del self.val_epoch_name
 
     def on_train_epoch_end(self):
         LOG.debug("Training epoch ending.")

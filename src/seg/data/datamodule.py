@@ -109,3 +109,6 @@ class SegDataModule(pl.LightningDataModule):
             pin_memory=True,
             drop_last=False,
         )
+
+    def get_val_df(self) -> pd.DataFrame:
+        return self.val_df

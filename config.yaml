@@ -34,7 +34,7 @@ train:
   epoch: 40
   num_workers: 2
   accelerator: auto
-  use_amp: false
+  precision: 32   # try 16-mixed on GPU for good performance
   debug: true
   gradient_clip_val: 1.0
   accumulate_grad_batches: 1
