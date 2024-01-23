@@ -37,40 +37,36 @@ class SegModelModule(pl.LightningModule):
             out["loss_full"] = batch_loss.detach().cpu().mean(dim=1).numpy()
         logits = logits.detach().cpu()
         out["onset_pred"] = logits.argmax(dim=1).numpy()
-        out["target_pred"] = logits.sigmoid().numpy()
+        out["target_pred"] = logits.sigmoid().float().numpy()
         return out
 
     def on_train_epoch_start(self):
-        self.train_epoch_loss = np.array([])
-        self.train_epoch_err = np.array([])
+        self.train_epoch_loss = []
+        self.train_epoch_err = []
         self.epoch_metrics = {}
         self.epoch_preds_images = []
 
     def training_step(self, batch, batch_idx):
         out = self.forward(batch)
-        self.train_epoch_loss = np.append(self.train_epoch_loss, out["loss_full"])
-        self.train_epoch_err = np.append(
-            self.train_epoch_err, out["onset_pred"] - batch["onset"].cpu().numpy()
-        )
+        self.train_epoch_loss.extend(out["loss_full"])
+        self.train_epoch_err.extend(out["onset_pred"] - batch["onset"].cpu().numpy())
         return out["loss"]
 
     def on_validation_epoch_start(self):
-        self.val_epoch_loss = np.array([])
-        self.val_epoch_err = np.array([])
+        self.val_epoch_loss = []
+        self.val_epoch_err = []
 
     def validation_step(self, batch, batch_idx):
         out = self.forward(batch)
-        self.val_epoch_loss = np.append(self.val_epoch_loss, out["loss_full"])
-        self.val_epoch_err = np.append(
-            self.val_epoch_err, out["onset_pred"] - batch["onset"].cpu().numpy()
-        )
+        self.val_epoch_loss.extend(out["loss_full"])
+        self.val_epoch_err.extend(out["onset_pred"] - batch["onset"].cpu().numpy())
         return out["loss"]
 
     def on_validation_epoch_end(self):
         LOG.debug("Validation epoch ending.")
         self.epoch_metrics.update(
             {
-                "val/loss": self.val_epoch_loss.mean(),
+                "val/loss": np.mean(self.val_epoch_loss),
                 "val/mae": (
                     np.abs(self.val_epoch_err) / self.cfg.train.samprate
                 ).mean(),
@@ -79,7 +75,8 @@ class SegModelModule(pl.LightningModule):
         # Plot the prediction error histograms
         fig = plt.figure()
         plt.hist(
-            self.val_epoch_err / self.cfg.train.samprate, bins=np.linspace(-1, 1, 21)
+            np.array(self.val_epoch_err) / self.cfg.train.samprate,
+            bins=np.linspace(-1, 1, 21),
         )
         plt.xlabel("Time (seconds)")
         plt.ylabel("Frequency")
@@ -95,7 +92,7 @@ class SegModelModule(pl.LightningModule):
         LOG.debug("Training epoch ending.")
         self.epoch_metrics.update(
             {
-                "trainer/loss": self.train_epoch_loss.mean(),
+                "trainer/loss": np.mean(self.train_epoch_loss),
                 "trainer/mae": (
                     np.abs(self.train_epoch_err) / self.cfg.train.samprate
                 ).mean(),

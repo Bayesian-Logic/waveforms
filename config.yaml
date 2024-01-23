@@ -1,0 +1,58 @@
+exp_name: TODO # Experiment name.
+notes: TODO # Any notes for this experiment.
+disable_wandb: true
+output_dir: ./output
+data_dir: ./data
+
+model:
+  pos_weight: 4
+  class_name: UNetEncoder
+  UNetEncoder:
+    max_len: 1200
+    d_model: 128
+    n_heads: 8
+    n_layers: 6
+    n_classes: 1
+    n_features: 1
+    dropout_prob: 0.1
+    kernel_size: 13
+    feedforward_mult: 2
+
+train:
+  fold_idx: 0
+  num_folds: 5
+  samprate: 20 # we will resample to this rate
+  data_window: 100 # LEB arrivals are centered in the data_window in each datum
+  train_window: 60 # a random subset of size train_window is selected from each datum
+
+  # We construct a Gaussian target of the given sigma and length seconds
+  target_sigma: 0.3
+  target_length: 1
+
+  batch_size: 128
+  seed: 42
+  epoch: 40
+  num_workers: 2
+  accelerator: auto
+  use_amp: false
+  debug: true
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 1
+  check_val_every_n_epoch: 1
+  train_full: false
+  deterministic: true
+  train_file: cb-100-2021001-2022001.parquet 
+  test_file: cb-100-2022001-2023001.parquet 
+
+optimizer:
+  lr: 0.0005
+  class_name: AdamW  # SGD or AdamW
+  SGD:
+    momentum: 0.9
+    weight_decay: 0
+    nesterov: false
+    dampening: 0
+  AdamW:
+    weight_decay: 0
+  scheduler: cosine
+  num_warmup_steps: 0
