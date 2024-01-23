@@ -1,10 +1,11 @@
 from types import SimpleNamespace
-from sqlite3 import Connection, Cursor
 from typing import Iterator, List
 import hashlib
 import json
+import logging
 
 import numpy as np
+from sqlite3 import Connection, Cursor
 
 
 def run_query(conn: Connection, query: str) -> Iterator[SimpleNamespace]:
@@ -55,3 +56,20 @@ def update_config(config, param, value):
     if keys[-1] not in current_level:
         raise ValueError(f"key '{param}' doesn't exist in config.")
     current_level[keys[-1]] = value
+
+
+def configure_logger():
+    # Configure logging with a custom formatter
+    formatter = logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    # Create a handler and set the formatter
+    handler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+
+    # Add the handler to the root logger
+    logging.getLogger().addHandler(handler)
+
+    # Set the desired logging level
+    logging.getLogger().setLevel(logging.INFO)

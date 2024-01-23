@@ -33,7 +33,7 @@ import argparse
 # add the source code to the python path
 sys.path.insert(1, "./src")
 from seg.utils.train import do_train
-from seg.utils.common import update_config
+from seg.utils.common import update_config, configure_logger
 
 
 def main():
@@ -64,19 +64,5 @@ def main():
 
 
 if __name__ == "__main__":
-    # Configure logging with a custom formatter
-    formatter = logging.Formatter(
-        "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    # Create a handler and set the formatter
-    handler = logging.StreamHandler()
-    handler.setFormatter(formatter)
-
-    # Add the handler to the root logger
-    logging.getLogger().addHandler(handler)
-
-    # Set the desired logging level
-    logging.getLogger().setLevel(logging.INFO)
-
+    configure_logger()
     main()
