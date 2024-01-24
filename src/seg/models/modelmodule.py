@@ -11,7 +11,7 @@ from transformers import get_cosine_schedule_with_warmup
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ..utils.common import plot_err_by_quantiles
+from ..utils.common import plot_err_by_range
 
 LOG = logging.getLogger("seg.models")
 
@@ -84,7 +84,7 @@ class SegModelModule(pl.LightningModule):
         )
         # Plot the prediction error histograms
         fig_file = os.path.join(self.cfg.output_dir, "val_err.jpg")
-        plot_err_by_quantiles(val_err, fig_file)
+        plot_err_by_range(val_err, fig_file)
         self.epoch_preds_images.append(str(fig_file))
 
         del self.val_epoch_loss

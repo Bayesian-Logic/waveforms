@@ -68,17 +68,16 @@ def do_train(json_cfg):
     pred_err = pd.read_csv(os.path.join(cfg.output_dir, "val_err.csv"))
     val_df_view = data.get_val_df().drop("data", axis=1)
     val_df = val_df_view.merge(pred_err, how="outer", on=["orid", "arid"])
-    val_df.to_csv(os.path.join(cfg.output_dir, "val_data.csv"), index=False)
+    val_data_file = os.path.join(cfg.output_dir, "val_data.csv")
+    val_df.to_csv(val_data_file, index=False)
     mae_snr_file = os.path.join(cfg.output_dir, "val_mae_snr.jpg")
     plot_mae_by_snr(val_df, mae_snr_file)
+    run.log({"mae_snr": wandb.Image(mae_snr_file)})
 
-    # We will save the validation predictions and upload them to wandb.
-    run.log(
-        {
-            f"val_fold_{cfg.train.fold_idx}": wandb.Table(dataframe=val_df),
-            "val_mae_snr": wandb.Image(mae_snr_file),
-        }
-    )
+    # Create a wandb artifact with the validation results
+    val_artifact = wandb.Artifact(f"val_fold_{cfg.train.fold_idx}", type="dataset")
+    val_artifact.add_file(val_data_file)
+    run.log_artifact(val_artifact)
 
     run.finish()
 

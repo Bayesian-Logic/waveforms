@@ -121,11 +121,14 @@ def plot_mae_by_snr(val_data, file_name, q=10):
     plt.close(fig)
 
 
-def plot_err_by_quantiles(err_vals, file_name, num_quantiles=20):
+def plot_err_by_quantiles(err_vals, file_name, num_quantiles=60, trim=0.01):
+    """
+    trim - Fraction of data to be dropped. We will drop the extreme quantiles
+    """
     fig = plt.figure()
 
     # Define quantiles (e.g., quartiles)
-    quantiles = np.linspace(0, 1, num_quantiles + 1)
+    quantiles = np.linspace(trim / 2, 1 - trim / 2, num_quantiles + 1)
     quantile_values = np.quantile(err_vals, quantiles)
 
     # Create histogram with quantile buckets
@@ -133,6 +136,29 @@ def plot_err_by_quantiles(err_vals, file_name, num_quantiles=20):
 
     plt.xlabel("Time (seconds)")
     plt.ylabel("Frequency")
+    plt.title("Val Error")
+
+    fig.savefig(file_name)
+    plt.close(fig)
+
+
+def plot_err_by_range(err_vals, file_name, num_bins=20, low=-1, high=1):
+    bins = np.linspace(low, high, num_bins + 1)
+
+    fig, ax = plt.subplots()
+    # Create histogram with quantile buckets
+    n, bins, patches = ax.hist(err_vals, bins=bins)
+
+    # Centering count over the corresponding bin
+    bin_centers = 0.5 * (bins[:-1] + bins[1:])
+    for count, x in zip(n, bin_centers):
+        ax.text(x, count, str(int(count)), ha="center", va="bottom")
+
+    # Adding a dotted vertical line parallel to the y-axis
+    ax.axvline(x=0, linestyle="dotted", color="black")
+
+    plt.xlabel("Time (seconds)")
+    plt.ylabel("Count")
     plt.title("Val Error")
 
     fig.savefig(file_name)
