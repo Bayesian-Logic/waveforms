@@ -101,21 +101,33 @@ def plot_mae_by_snr(val_data, file_name, q=10):
     # Compute MAE for each snr bucket
     mae_per_bucket = val_data.groupby("snr_bucket", observed=False)["abs_err"].mean()
 
-    # Get midpoints of SNR buckets for x-axis labels
-    snr_midpoints = [((a + b) / 2) for a, b in zip(snr_bins[:-1], snr_bins[1:])]
-
     # Plot the MAE per snr bucket with custom x-axis labels
     fig, ax = plt.subplots()
-    mae_per_bucket.plot(
+    bars = mae_per_bucket.plot(
         kind="bar",
         ax=ax,
-        xlabel="SNR Bucket",
+        xlabel="Upper value of SNR bucket",
         ylabel="Mean Absolute Error",
         title="MAE per SNR Bucket",
     )
 
+    # Add annotations to the top of each bar
+    for bar in bars.patches:
+        height = bar.get_height()
+        ax.annotate(
+            f"{height:.2f}",
+            xy=(bar.get_x() + bar.get_width() / 4, height),
+            xytext=(0, 3),  # 3 points vertical offset
+            textcoords="offset points",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+        )
+
     # Customize x-axis labels with one decimal value
-    ax.set_xticklabels([f"{mid:.1f}" for mid in snr_midpoints], rotation=45, ha="right")
+    ax.set_xticklabels(
+        [f"{high:.1f}" for high in snr_bins[1:]], rotation=0, ha="center"
+    )
 
     fig.savefig(file_name)
     plt.close(fig)
