@@ -13,7 +13,7 @@ from pytorch_lightning.callbacks import (
 from pytorch_lightning.loggers import WandbLogger
 import pandas as pd
 
-from .common import json_to_py, plot_mae_by_snr
+from .common import json_to_py, plot_mae_by_snr, plot_dfx_err_overlay
 from ..data.datamodule import SegDataModule
 from ..models.modelmodule import SegModelModule
 
@@ -72,7 +72,9 @@ def do_train(json_cfg):
     val_df.to_csv(val_data_file, index=False)
     mae_snr_file = os.path.join(cfg.output_dir, "val_mae_snr.jpg")
     plot_mae_by_snr(val_df, mae_snr_file)
-    run.log({"mae_snr": wandb.Image(mae_snr_file)})
+    dfx_mae_snr_file = os.path.join(cfg.output_dir, "val_dfx_mae_snr.jpg")
+    plot_dfx_err_overlay(val_df, dfx_mae_snr_file)
+    run.log({"MAE": [wandb.Image(mae_snr_file), wandb.Image(dfx_mae_snr_file)]})
 
     # Create a wandb artifact with the validation results
     val_artifact = wandb.Artifact(f"val_fold_{cfg.train.fold_idx}", type="dataset")

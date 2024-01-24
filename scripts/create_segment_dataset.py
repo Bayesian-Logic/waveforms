@@ -69,14 +69,14 @@ def read_arguments():
     )
     parser.add_argument(
         "start",
-        metavar="JDATE",
+        metavar="START_JDATE",
         nargs=1,
         type=str,
         help="Starting date of dataset (inclusive).",
     )
     parser.add_argument(
         "end",
-        metavar="JDATE",
+        metavar="END_JDATE",
         nargs=1,
         type=str,
         help="Ending date of dataset (not inclusive).",
@@ -142,7 +142,9 @@ def main():
             data.extend(waveforms)
         if (idx + 1) % (len(all_orids) // 10) == 0:
             info(f"Downloaded {100 * (idx+1) // len(all_orids)} %.")
-    data_file = f"{args.channel}-{args.window}-{args.start[0]}-{args.end[0]}.parquet"
+    data_file = (
+        f"seg-{args.channel}-{args.window}-{args.start[0]}-{args.end[0]}.parquet"
+    )
     info("Generating parquet file.")
     df = pandas.DataFrame(data=data, columns=COLUMNS)
     table = pyarrow.Table.from_pandas(df, preserve_index=False)
@@ -185,7 +187,7 @@ def fetch_event(curs, orid, channel, window):
         join segment.wfdisc wf using (sta, wfid)
         left join idcx.arrival iarr using (arid, sta)
         where orid=:1 and datatype in ('t4', 's4') and wf.chan = '{channel}'
-        and lass.phase in ('P', 'Pn', 'Pg') and larr.snr > 10
+        and lass.phase in ('P', 'Pn', 'Pg')
         and lass.timedef='d'
         and larr.time between wf.time + {window//2} and wf.endtime - {window//2}
         """,

@@ -142,6 +142,66 @@ def plot_err_by_quantiles(err_vals, file_name, num_quantiles=60, trim=0.01):
     plt.close(fig)
 
 
+def plot_dfx_err_overlay(val_data, file_name, q=10):
+    """
+    Computes plots of Mean Absolute Error (MAE) and the difference between
+    auto_arrival_time and arrival_time overlaid on each other,
+    grouped by SNR buckets, and saves it to `file_name`.
+
+    val_data:
+    A pandas dataframe with columns `snr`, `pred_err`, `arrival_time`,
+    and `auto_arrival_time`.
+    file_name:
+    File to store the plot.
+    q:
+    Number of quantiles. 10 for deciles, 4 for quartiles, etc.
+    Alternately array of quantiles, e.g. [0, .25, .5, .75, 1.] for quartiles.
+    Also, see documentation for pandas.qcut,
+    https://pandas.pydata.org/docs/reference/api/pandas.qcut.html
+    """
+    # Only consider rows with an auto_arrival_time and make a copy of the dataframe.
+    val_data = val_data.dropna(subset=["auto_arrival_time"])[
+        ["pred_err", "snr", "arrival_time", "auto_arrival_time"]
+    ].copy()
+
+    # Compute the absolute error of Deep Learning method
+    val_data["Deep Learning"] = np.abs(val_data.pred_err)
+
+    # Compute the difference between auto_arrival_time and arrival_time
+    val_data["dfx_err"] = val_data["auto_arrival_time"] - val_data["arrival_time"]
+    val_data["DFX"] = np.abs(val_data.dfx_err)
+
+    # Create SNR buckets by percentile
+    val_data["snr_bucket"], snr_bins = pd.qcut(val_data["snr"], q=q, retbins=True)
+
+    # Compute MAE for each SNR bucket
+    mae_per_bucket = val_data.groupby("snr_bucket", observed=False)[
+        ["Deep Learning", "DFX"]
+    ].mean()
+
+    # Get midpoints of SNR buckets for x-axis labels
+    snr_midpoints = [((a + b) / 2) for a, b in zip(snr_bins[:-1], snr_bins[1:])]
+
+    # Plot the MAE per SNR bucket with custom x-axis labels
+    fig, ax = plt.subplots()
+
+    mae_per_bucket.plot(
+        kind="bar",
+        ax=ax,
+        xlabel="Upper value of SNR bucket",
+        ylabel="Mean Absolute Error",
+        title="MAE per SNR Bucket",
+    )
+
+    ax.set_xticklabels(
+        [f"{high:.1f}" for high in snr_bins[1:]], rotation=0, ha="center"
+    )
+
+    fig.tight_layout()
+    fig.savefig(file_name)
+    plt.close(fig)
+
+
 def plot_err_by_range(err_vals, file_name, num_bins=20, low=-1, high=1):
     bins = np.linspace(low, high, num_bins + 1)
 
