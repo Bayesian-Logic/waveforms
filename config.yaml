@@ -31,7 +31,7 @@ train:
 
   batch_size: 128
   seed: 42
-  epoch: 40
+  epoch: 30
   num_workers: 2
   accelerator: auto
   precision: 32   # try 16-mixed on GPU for good performance

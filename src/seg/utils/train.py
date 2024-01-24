@@ -13,7 +13,7 @@ from pytorch_lightning.callbacks import (
 from pytorch_lightning.loggers import WandbLogger
 import pandas as pd
 
-from .common import json_to_py
+from .common import json_to_py, plot_mae_by_snr
 from ..data.datamodule import SegDataModule
 from ..models.modelmodule import SegModelModule
 
@@ -63,15 +63,22 @@ def do_train(json_cfg):
 
     trainer.fit(model, data)
 
-    # We will now join the validation prediction errors with the validation data.
+    # We will now join the validation prediction errors with the validation data
+    # and plot MAE by SNR.
     pred_err = pd.read_csv(os.path.join(cfg.output_dir, "val_err.csv"))
-    val_df = data.get_val_df()
-    del val_df["data"]
-    val_df = val_df.merge(pred_err, how="outer", on=["orid", "arid"])
-    # We will save the validation predictions and upload them to wandb.
+    val_df_view = data.get_val_df().drop("data", axis=1)
+    val_df = val_df_view.merge(pred_err, how="outer", on=["orid", "arid"])
     val_df.to_csv(os.path.join(cfg.output_dir, "val_data.csv"), index=False)
-    val_table = wandb.Table(dataframe=val_df)
-    run.log({f"val_fold_{cfg.train.fold_idx}": val_table})
+    mae_snr_file = os.path.join(cfg.output_dir, "val_mae_snr.jpg")
+    plot_mae_by_snr(val_df, mae_snr_file)
+
+    # We will save the validation predictions and upload them to wandb.
+    run.log(
+        {
+            f"val_fold_{cfg.train.fold_idx}": wandb.Table(dataframe=val_df),
+            "val_mae_snr": wandb.Image(mae_snr_file),
+        }
+    )
 
     run.finish()
 
